@@ -60,6 +60,18 @@ class Scanner(private val source: String) {
                     while (peek() != '\n' && !isAtEnd()) {
                         advance()
                     }
+                } else if (match('*')) { // start comments
+                    while (!(peek() == '*' && peekNext() == '/') && !isAtEnd()) {
+                        if (peek() == '\n') {
+                            line++
+                        }
+                        advance()
+                    }
+                    if (isAtEnd()) {
+                        error(line, "Unexpected eof. Comment didn't close.")
+                    }
+                    advance()
+                    advance()
                 } else {
                     addToken(TokenType.SLASH)
                 }
