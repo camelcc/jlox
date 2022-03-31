@@ -1,8 +1,6 @@
+import com.google.devtools.ksp.getDeclaredProperties
 import com.google.devtools.ksp.processing.*
-import com.google.devtools.ksp.symbol.ClassKind
-import com.google.devtools.ksp.symbol.KSAnnotated
-import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSVisitorVoid
+import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
 import java.io.OutputStream
 
@@ -43,20 +41,34 @@ class ASTProcessor(val codeGenerator: CodeGenerator, val logger: KSPLogger): Sym
             //    fun visitBinaryExpr(expr: Expr.Binary): R
             //}
             file += "import ${classDeclaration.qualifiedName?.asString()}\n\n"
-            file += "interface Visitor<R> {\n"
-            classDeclaration.getSealedSubclasses().forEach {
-                file += "    fun visit${it.simpleName.asString()}Expr(expr: ${classDeclaration.simpleName.asString()}.${it.simpleName.asString()}): R\n"
+
+            file += "sealed class Expression {\n"
+            classDeclaration.getSealedSubclasses().forEach { dataClass ->
+                file += "    data class ${dataClass.simpleName.asString()}("
+                dataClass.getDeclaredProperties().forEach { property ->
+                    val type = property.type.resolve()
+                    file += "val ${property.simpleName.asString()}: "
+                    if (type.declaration == classDeclaration) {
+                        file += "Expression"
+                    } else {
+                        file += type.declaration.qualifiedName?.asString() ?: ""
+                        file += if (type.nullability == Nullability.NULLABLE) "?" else ""
+                    }
+                    file += ", "
+                }
+                file += "): Expression() {\n"
+                file += "        override fun <R> accept(visitor: Visitor<R>): R =\n"
+                file += "            visitor.visit${dataClass.simpleName.asString()}Expression(this)\n"
+                file += "    }\n"
             }
+            file += "    abstract fun <R> accept(visitor: Visitor<R>): R\n"
             file += "}\n\n"
 
-            //fun <R> Expr.Binary.accept(visitor: Visitor<R>) {
-            //    visitor.visitBinaryExpr(this)
-            //}
-            classDeclaration.getSealedSubclasses().forEach {
-                file += "fun <R> ${classDeclaration.simpleName.asString()}.${it.simpleName.asString()}.accept(visitor: Visitor<R>) {\n"
-                file += "    visitor.visit${it.simpleName.asString()}${classDeclaration.simpleName.asString()}(this)\n"
-                file += "}\n"
+            file += "interface Visitor<R> {\n"
+            classDeclaration.getSealedSubclasses().forEach { dataClass ->
+                file += "    fun visit${dataClass.simpleName.asString()}Expression(expr: Expression.${dataClass.simpleName.asString()}): R\n"
             }
+            file += "}\n\n"
         }
     }
 }
