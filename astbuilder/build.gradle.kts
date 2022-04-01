@@ -12,6 +12,7 @@ repositories {
 dependencies {
     implementation(kotlin("stdlib"))
     implementation("com.squareup:kotlinpoet:1.11.0")
+    implementation("com.squareup:kotlinpoet-ksp:1.11.0")
     implementation("com.google.devtools.ksp:symbol-processing-api:1.6.10-1.0.2")
 }
 
