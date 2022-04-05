@@ -6,6 +6,7 @@ import com.camelcc.lox.ast.Visitor
 
 @ASTVisitor
 sealed class Expr {
+    data class Ternary(val check: Expr, val trueValue: Expr, val falseValue: Expr): Expr()
     data class Binary(val left: Expr, val operator: Token, val right: Expr): Expr()
     data class Grouping(val expr: Expr): Expr()
     data class Literal(val value: Any?): Expr()
@@ -14,6 +15,9 @@ sealed class Expr {
 
 class ASTPrinter: Visitor<String> {
     fun print(expr: Expression): String = expr.accept(this)
+
+    override fun visitTernaryExpression(expr: Expression.Ternary) =
+        parenthesize("ternary", expr.check, expr.trueValue, expr.falseValue)
 
     override fun visitBinaryExpression(expr: Expression.Binary): String =
         parenthesize(expr.operator.lexeme, expr.left, expr.right)

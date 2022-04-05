@@ -1,9 +1,12 @@
+import com.camelcc.lox.ASTPrinter
+import com.camelcc.lox.Parser
 import com.camelcc.lox.Scanner
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.math.exp
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -40,10 +43,14 @@ private fun runPrompt() {
 private fun run(script: String) {
     val scanner = Scanner(script)
     val tokens = scanner.scanTokens()
+    val parser = Parser(tokens)
+    val expression = parser.parse()
 
-    tokens.forEach {
-        print(it)
+    if (hasError) {
+        return
     }
+
+    print(ASTPrinter().print(expression!!))
 }
 
 var hasError = false

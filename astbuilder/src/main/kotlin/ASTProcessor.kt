@@ -7,13 +7,8 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.ksp.KotlinPoetKspPreview
 import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.writeTo
-import java.io.OutputStream
 
 class ASTProcessor(private val codeGenerator: CodeGenerator, val logger: KSPLogger): SymbolProcessor {
-    operator fun OutputStream.plusAssign(str: String) {
-        this.write(str.toByteArray())
-    }
-
     @OptIn(KotlinPoetKspPreview::class)
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val symbols = resolver
@@ -92,7 +87,6 @@ class ASTProcessor(private val codeGenerator: CodeGenerator, val logger: KSPLogg
                     .build())
                 .build())
 
-            val name = TypeName
             val visitor = TypeSpec.interfaceBuilder("Visitor")
                 .addTypeVariable(TypeVariableName("R"))
                 .addFunctions(dataClasses.map { dataClass ->

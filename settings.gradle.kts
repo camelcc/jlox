@@ -10,6 +10,7 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
+    // https://github.com/realm/realm-java/issues/7374
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         google()
