@@ -1,6 +1,4 @@
-import com.camelcc.lox.ASTPrinter
-import com.camelcc.lox.Parser
-import com.camelcc.lox.Scanner
+import com.camelcc.lox.*
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.charset.Charset
@@ -8,6 +6,8 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.math.exp
 import kotlin.system.exitProcess
+
+val interpreter = Interpreter()
 
 fun main(args: Array<String>) {
     if (args.size > 1) {
@@ -26,6 +26,9 @@ private fun runFile(filePath: String) {
 
     if (hasError) {
         exitProcess(65)
+    }
+    if (hadRuntimeError) {
+        exitProcess(70)
     }
 }
 
@@ -50,10 +53,11 @@ private fun run(script: String) {
         return
     }
 
-    print(ASTPrinter().print(expression!!))
+    interpreter.interpret(expression!!)
 }
 
 var hasError = false
+var hadRuntimeError = false
 
 fun error(line: Int, message: String) {
     report(line = line, where = "", message = message)
@@ -62,4 +66,9 @@ fun error(line: Int, message: String) {
 fun report(line: Int, where: String, message: String) {
     System.err.println("[line $line] Error$where: $message")
     hasError = true
+}
+
+fun runtimeError(error: RuntimeError) {
+    System.err.println("${error.message}\n[line ${error.token.line}]")
+    hadRuntimeError = true
 }
