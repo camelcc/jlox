@@ -47,13 +47,13 @@ private fun run(script: String) {
     val scanner = Scanner(script)
     val tokens = scanner.scanTokens()
     val parser = Parser(tokens)
-    val expression = parser.parse()
+    val statements = parser.parse()
 
     if (hasError) {
         return
     }
 
-    interpreter.interpret(expression!!)
+    interpreter.interpret(statements)
 }
 
 var hasError = false

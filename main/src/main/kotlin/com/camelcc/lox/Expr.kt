@@ -1,46 +1,22 @@
 package com.camelcc.lox
 
-import com.camelcc.lox.ast.ASTVisitor
-import com.camelcc.lox.ast.Expression
-import com.camelcc.lox.ast.Visitor
+import com.camelcc.lox.ast.ASTGenerator
 
-@ASTVisitor
+@ASTGenerator(name = "Expression", mapping = ["E:Expression"])
 sealed class Expr {
-    data class Ternary(val check: Expr, val trueValue: Expr, val falseValue: Expr): Expr()
-    data class Binary(val left: Expr, val operator: Token, val right: Expr): Expr()
-    data class Grouping(val expr: Expr): Expr()
+    data class Assign<E>(val name: Token, val expr: E): Expr()
+    data class Ternary<E>(val check: E, val trueValue: E, val falseValue: E): Expr()
+    data class Binary<E>(val left: E, val operator: Token, val right: E): Expr()
+    data class Grouping<E>(val expr: E): Expr()
     data class Literal(val value: Any?): Expr()
-    data class Unary(val token: Token, val right: Expr): Expr()
+    data class Unary<E>(val token: Token, val right: E): Expr()
+    data class Variable(val name: Token): Expr()
 }
 
-class ASTPrinter: Visitor<String> {
-    fun print(expr: Expression): String = expr.accept(this)
-
-    override fun visitTernaryExpression(expr: Expression.Ternary) =
-        parenthesize("ternary", expr.check, expr.trueValue, expr.falseValue)
-
-    override fun visitBinaryExpression(expr: Expression.Binary): String =
-        parenthesize(expr.operator.lexeme, expr.left, expr.right)
-
-    override fun visitGroupingExpression(expr: Expression.Grouping): String =
-        parenthesize("group", expr.expr)
-
-    override fun visitLiteralExpression(expr: Expression.Literal): String {
-        if (expr.value == null) return "nil"
-        return expr.value.toString()
-    }
-
-    override fun visitUnaryExpression(expr: Expression.Unary): String =
-        parenthesize(expr.token.lexeme, expr.right)
-
-    private fun parenthesize(name: String, vararg exprs: Expression): String {
-        val sb = StringBuilder()
-        sb.append("(").append(name)
-        for (expr in exprs) {
-            sb.append(" ")
-            sb.append(expr.accept(this))
-        }
-        sb.append(")")
-        return sb.toString()
-    }
+@ASTGenerator(name = "Statement", mapping = ["E:Expression", "S:Statement"])
+sealed class Stat {
+    data class Block<S>(val statements: List<S>): Stat()
+    data class Expr<E>(val expr: E): Stat()
+    data class Print<E>(val expr: E): Stat()
+    data class Var<E>(val name: Token, val initializer: E?): Stat()
 }

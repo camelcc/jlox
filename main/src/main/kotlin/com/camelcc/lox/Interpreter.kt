@@ -1,116 +1,169 @@
 package com.camelcc.lox
 
 import com.camelcc.lox.ast.Expression
-import com.camelcc.lox.ast.Visitor
+import com.camelcc.lox.ast.Statement
 import runtimeError
 
 class RuntimeError(val token: Token, override val message: String): RuntimeException(message)
 
-class Interpreter: Visitor<Any?> {
-    fun interpret(expression: Expression) {
+class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
+    private var environment = Environment()
+
+    fun interpret(statements: List<Statement>) {
         try {
-            val value = evaluate(expression)
-            println(stringify(value))
+            statements.forEach { statement ->
+                val value = execute(statement)
+                if (statement is Statement.Expr) {
+                    println(stringify(value))
+                }
+            }
         } catch (error: RuntimeError) {
             runtimeError(error)
         }
     }
 
-    override fun visitTernaryExpression(expr: Expression.Ternary): Any? {
-        return if (isTruthy(evaluate(expr.check))) {
-            evaluate(expr.trueValue)
+    private fun execute(statement: Statement) =
+        statement.accept(this)
+
+    override fun visitTernaryExpression(expression: Expression.Ternary): Any? {
+        return if (isTruthy(evaluate(expression.check))) {
+            evaluate(expression.trueValue)
         } else {
-            evaluate(expr.falseValue)
+            evaluate(expression.falseValue)
         }
     }
 
-    override fun visitBinaryExpression(expr: Expression.Binary): Any? {
-        val left = evaluate(expr.left)
-        val right = evaluate(expr.right)
-        return when (expr.operator.tokenType) {
+    override fun visitBinaryExpression(expression: Expression.Binary): Any? {
+        val left = evaluate(expression.left)
+        val right = evaluate(expression.right)
+        return when (expression.operator.tokenType) {
             TokenType.BANG_EQUAL -> !isEqual(left, right)
             TokenType.EQUAL_EQUAL -> isEqual(left, right)
             TokenType.GREATER -> {
-                if (checkOperandsType<Double>(expr.operator, left, right)) {
+                if (checkOperandsType<Double>(expression.operator, left, right)) {
                     (left as Double) > (right as Double)
-                } else if (checkOperandsType<String>(expr.operator, left, right)) {
+                } else if (checkOperandsType<String>(expression.operator, left, right)) {
                     (left as String) > (right as String)
                 } else {
-                    throw RuntimeError(expr.operator, "Operands must be either numbers or strings")
+                    throw RuntimeError(expression.operator, "Operands must be either numbers or strings")
                 }
             }
             TokenType.GREATER_EQUAL -> {
-                if (checkOperandsType<Double>(expr.operator, left, right)) {
+                if (checkOperandsType<Double>(expression.operator, left, right)) {
                     (left as Double) >= (right as Double)
-                } else if (checkOperandsType<String>(expr.operator, left, right)) {
+                } else if (checkOperandsType<String>(expression.operator, left, right)) {
                     (left as String) >= (right as String)
                 } else {
-                    throw RuntimeError(expr.operator, "Operands must be either numbers or strings")
+                    throw RuntimeError(expression.operator, "Operands must be either numbers or strings")
                 }
             }
             TokenType.LESS -> {
-                if (checkOperandsType<Double>(expr.operator, left, right)) {
+                if (checkOperandsType<Double>(expression.operator, left, right)) {
                     (left as Double) < (right as Double)
-                } else if (checkOperandsType<String>(expr.operator, left, right)) {
+                } else if (checkOperandsType<String>(expression.operator, left, right)) {
                     (left as String) < (right as String)
                 } else {
-                    throw RuntimeError(expr.operator, "Operands must be either numbers or strings")
+                    throw RuntimeError(expression.operator, "Operands must be either numbers or strings")
                 }
             }
             TokenType.LESS_EQUAL -> {
-                if (checkOperandsType<Double>(expr.operator, left, right)) {
+                if (checkOperandsType<Double>(expression.operator, left, right)) {
                     (left as Double) <= (right as Double)
-                } else if (checkOperandsType<String>(expr.operator, left, right)) {
+                } else if (checkOperandsType<String>(expression.operator, left, right)) {
                     (left as String) <= (right as String)
                 } else {
-                    throw RuntimeError(expr.operator, "Operands must be either numbers or strings")
+                    throw RuntimeError(expression.operator, "Operands must be either numbers or strings")
                 }
             }
             TokenType.MINUS -> {
-                checkNumberOperands(expr.operator, left, right)
+                checkNumberOperands(expression.operator, left, right)
                 (left as Double) - (right as Double)
             }
             TokenType.PLUS -> {
-                if (checkOperandsType<Double>(expr.operator, left, right)) {
+                if (checkOperandsType<Double>(expression.operator, left, right)) {
                     (left as Double) + (right as Double)
-                } else if (checkOperandsType<String>(expr.operator, left, right)) {
+                } else if (checkOperandsType<String>(expression.operator, left, right)) {
                     (left as String) + (right as String)
                 } else if (left is String && right is Double) {
                     left + stringify(right)
                 } else {
-                    throw RuntimeError(expr.operator, "Operands must be either numbers or strings")
+                    throw RuntimeError(expression.operator, "Operands must be either numbers or strings")
                 }
             }
             TokenType.SLASH -> {
-                checkNumberOperands(expr.operator, left, right)
+                checkNumberOperands(expression.operator, left, right)
                 if ((right as Double) == .0) {
-                    throw RuntimeError(expr.operator, "can't / by zero")
+                    throw RuntimeError(expression.operator, "can't / by zero")
                 }
                 (left as Double) / (right as Double)
             }
             TokenType.STAR -> {
-                checkNumberOperands(expr.operator, left, right)
+                checkNumberOperands(expression.operator, left, right)
                 (left as Double) * (right as Double)
             }
             else -> null
         }
     }
 
-    override fun visitGroupingExpression(expr: Expression.Grouping) =
-        evaluate(expr.expr)
+    override fun visitGroupingExpression(expression: Expression.Grouping) =
+        evaluate(expression.expr)
 
-    override fun visitLiteralExpression(expr: Expression.Literal) =
-        expr.value
+    override fun visitLiteralExpression(expression: Expression.Literal) =
+        expression.value
 
-    override fun visitUnaryExpression(expr: Expression.Unary): Any? {
-        val right = evaluate(expr.right)
-        return when (expr.token.tokenType) {
+    override fun visitUnaryExpression(expression: Expression.Unary): Any? {
+        val right = evaluate(expression.right)
+        return when (expression.token.tokenType) {
             TokenType.BANG -> !isTruthy(right)
             TokenType.MINUS -> {
-                checkNumberOperand(expr.token, right)
+                checkNumberOperand(expression.token, right)
                 -(right as Double)
             }
             else -> null
+        }
+    }
+
+    override fun visitVariableExpression(expression: Expression.Variable) =
+        environment.get(expression.name)
+
+    override fun visitAssignExpression(expression: Expression.Assign): Any? {
+        val value = evaluate(expression.expr)
+        environment.assign(expression.name, value)
+        return value
+    }
+
+    override fun visitExprStatement(statement: Statement.Expr): Any? {
+        return evaluate(statement.expr)
+    }
+
+    override fun visitPrintStatement(statement: Statement.Print): Any? {
+        val value = evaluate(statement.expr)
+        println(stringify(value))
+        return null
+    }
+
+    override fun visitVarStatement(statement: Statement.Var): Any? {
+        val value = statement.initializer?.let {
+            evaluate(statement.initializer)
+        }
+        environment.define(statement.name.lexeme, value)
+        return null
+    }
+
+    override fun visitBlockStatement(statement: Statement.Block): Any? {
+        executeBlock(statement.statements, Environment(environment))
+        return null
+    }
+
+    private fun executeBlock(statements: List<Statement>, env: Environment) {
+        val popEnvironment = environment
+        try {
+            environment = env
+            for (statement in statements) {
+                execute(statement)
+            }
+        } finally {
+            environment = popEnvironment
         }
     }
 

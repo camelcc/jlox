@@ -1,6 +1,7 @@
 package com.camelcc.lox
 
 import com.camelcc.lox.ast.Expression
+import com.camelcc.lox.ast.Statement
 import report
 
 class Parser(private val tokens: List<Token>) {
@@ -8,12 +9,14 @@ class Parser(private val tokens: List<Token>) {
 
     private var current: Int = 0
 
-    fun parse(): Expression? {
-        return try {
-            expression()
-        } catch (error: ParseError) {
-            null
+    fun parse(): List<Statement> {
+        val statements = mutableListOf<Statement>()
+        while (!isAtEnd) {
+            declaration()?.also {
+                statements.add(it)
+            }
         }
+        return statements
     }
 
     private val isAtEnd: Boolean
@@ -33,14 +36,95 @@ class Parser(private val tokens: List<Token>) {
         return previous
     }
 
-    // expression     → equality ;
+    /* program        → statement* EOF ; */
+
+    // declaration    → varDecl
+    //                | statement ;
+    private fun declaration(): Statement? {
+        try {
+            if (match(TokenType.VAR)) {
+                return varDeclaration()
+            }
+            return statement()
+        } catch (error: ParseError) {
+            synchronize()
+            return null
+        }
+    }
+
+    // varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
+    private fun varDeclaration(): Statement {
+        val name = consume(TokenType.IDENTIFIER, "Expect variable name.")
+        val initializer = if (match(TokenType.EQUAL)) {
+            expression()
+        } else null
+        consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.")
+        return Statement.Var(name, initializer)
+    }
+
+    // statement      → exprStmt
+    //                | printStmt ;
+    //                | block ;
+    private fun statement(): Statement {
+        if (match(TokenType.PRINT)) {
+            return printStatement()
+        }
+        if (match(TokenType.LEFT_BRACE)) {
+            return Statement.Block(block())
+        }
+        return expressionStatement()
+    }
+
+    // block          → "{" declaration* "}" ;
+    private fun block(): List<Statement> {
+        val statements = mutableListOf<Statement>()
+        while (!isAtEnd && !check(TokenType.RIGHT_BRACE)) {
+            declaration()?.let {
+                statements.add(it)
+            }
+        }
+        consume(TokenType.RIGHT_BRACE, "Expect '}' after block")
+        return statements
+    }
+
+    // printStmt      → "print" expression ";" ;
+    private fun printStatement(): Statement {
+        val value = expression()
+        consume(TokenType.SEMICOLON, "Expect ';' after value.")
+        return Statement.Print(value)
+    }
+
+    // exprStmt       → expression ";" ;
+    private fun expressionStatement(): Statement {
+        val value = expression()
+        consume(TokenType.SEMICOLON, "Expect ';' after value.")
+        return Statement.Expr(value)
+    }
+
+    // expression     → assignment ;
     private fun expression() = comma()
 
     // comma          → expression ( , expression )* ;
     private fun comma(): Expression {
-        var expr = ternary()
+        var expr = assignment()
         while (match(TokenType.COMMA)) {
             expr = comma()
+        }
+        return expr
+    }
+
+    // assignment     → IDENTIFIER "=" assignment
+    //                | ternary;
+    private fun assignment(): Expression {
+        val expr = ternary()
+        if (match(TokenType.EQUAL)) {
+            val equals = previous
+            val value = assignment()
+            if (expr is Expression.Variable) {
+                val name = expr.name
+                return Expression.Assign(name, value)
+            }
+            error(equals, "Invalid assignment target.")
         }
         return expr
     }
@@ -142,6 +226,9 @@ class Parser(private val tokens: List<Token>) {
         }
         if (match(TokenType.NUMBER, TokenType.STRING)) {
             return Expression.Literal(previous.literal)
+        }
+        if (match(TokenType.IDENTIFIER)) {
+            return Expression.Variable(previous)
         }
         if (match(TokenType.LEFT_PAREN)) {
             val expr = expression()
