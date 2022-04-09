@@ -8,6 +8,7 @@ class RuntimeError(val token: Token, override val message: String): RuntimeExcep
 
 class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
     private var environment = Environment()
+    private var breakWhile = false
 
     fun interpret(statements: List<Statement>) {
         try {
@@ -111,6 +112,20 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
     override fun visitLiteralExpression(expression: Expression.Literal) =
         expression.value
 
+    override fun visitLogicalExpression(expression: Expression.Logical): Any? {
+        val left = evaluate(expression.left)
+        if (expression.operator.tokenType == TokenType.OR) {
+            if (isTruthy(left)) {
+                return left
+            }
+        } else { // AND
+            if (!isTruthy(left)) {
+                return left
+            }
+        }
+        return evaluate(expression.right)
+    }
+
     override fun visitUnaryExpression(expression: Expression.Unary): Any? {
         val right = evaluate(expression.right)
         return when (expression.token.tokenType) {
@@ -130,6 +145,31 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
         val value = evaluate(expression.expr)
         environment.assign(expression.name, value)
         return value
+    }
+
+    override fun visitIfStatement(statement: Statement.If): Any? {
+        if (isTruthy(evaluate(statement.condition))) {
+            execute(statement.thenStatement)
+        } else if (statement.elseStatement != null) {
+            execute(statement.elseStatement)
+        }
+        return null
+    }
+
+    override fun visitWhileStatement(statement: Statement.While): Any? {
+        while (isTruthy(evaluate(statement.condition))) {
+            if (breakWhile) {
+                breakWhile = false
+                break
+            }
+            execute(statement.body)
+        }
+        return null
+    }
+
+    override fun visitBreakStatement(statement: Statement.Break): Any? {
+        breakWhile = true
+        return null
     }
 
     override fun visitExprStatement(statement: Statement.Expr): Any? {

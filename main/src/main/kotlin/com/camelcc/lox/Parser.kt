@@ -8,6 +8,7 @@ class Parser(private val tokens: List<Token>) {
     class ParseError : RuntimeException()
 
     private var current: Int = 0
+    private var whileDepth: Int = 0
 
     fun parse(): List<Statement> {
         val statements = mutableListOf<Statement>()
@@ -63,16 +64,78 @@ class Parser(private val tokens: List<Token>) {
     }
 
     // statement      → exprStmt
+    //                | forStmt
+    //                | ifStmt
     //                | printStmt ;
+    //                | whileStmt
     //                | block ;
     private fun statement(): Statement {
-        if (match(TokenType.PRINT)) {
-            return printStatement()
-        }
-        if (match(TokenType.LEFT_BRACE)) {
-            return Statement.Block(block())
-        }
+        if (match(TokenType.FOR)) return forStatement()
+        if (match(TokenType.IF)) return ifStatement()
+        if (match(TokenType.PRINT)) return printStatement()
+        if (match(TokenType.WHILE)) return whileStatement()
+        if (match(TokenType.BREAK)) return breakStatement()
+        if (match(TokenType.LEFT_BRACE)) return Statement.Block(block())
         return expressionStatement()
+    }
+
+    // ifStmt         → "if" "(" expression ")" statement
+    //               ( "else" statement )? ;
+    private fun ifStatement(): Statement {
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.")
+        val condition = expression()
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after if condition.")
+        val thenStatement = statement()
+        val elseStatement = if (match(TokenType.ELSE)) statement() else null
+        return Statement.If(condition, thenStatement, elseStatement)
+    }
+
+    // whileStmt      → "while" "(" expression ")" statement ;
+    private fun whileStatement(): Statement {
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.")
+        val condition = expression()
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after if condition.")
+        whileDepth++
+        val body = statement()
+        whileDepth--
+        return Statement.While(condition, body)
+    }
+
+    private fun breakStatement(): Statement {
+        if (whileDepth == 0) {
+            throw error(peek, "Unexpected 'break' without for/while loop")
+        }
+        consume(TokenType.SEMICOLON, "Expect ';' after break.")
+        return Statement.Break
+    }
+
+    // forStmt        → "for" "(" ( varDecl | exprStmt | ";" )
+    //                  expression? ";"
+    //                  expression? ")" statement ;
+    private fun forStatement(): Statement {
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.")
+        val initializer = if (match(TokenType.SEMICOLON)) {
+            null
+        } else if (match(TokenType.VAR)) {
+            varDeclaration()
+        } else {
+            expressionStatement()
+        }
+        val condition = if (!check(TokenType.SEMICOLON)) expression() else Expression.Literal(true)
+        consume(TokenType.SEMICOLON, "Expect ';' after loop condition.")
+        val increment = if (!check(TokenType.RIGHT_PAREN)) expression() else null
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.")
+        whileDepth++
+        var body = statement()
+        whileDepth--
+        if (increment != null) {
+            body = Statement.Block(listOf(body, Statement.Expr(increment)))
+        }
+        body = Statement.While(condition, body)
+        if (initializer != null) {
+            body = Statement.Block(listOf(initializer, body))
+        }
+        return body
     }
 
     // block          → "{" declaration* "}" ;
@@ -129,14 +192,36 @@ class Parser(private val tokens: List<Token>) {
         return expr
     }
 
-    // ternary        → equality ? expression : ternary | equality
+    // ternary        → logic_or ? expression : ternary | logic_or
     private fun ternary(): Expression {
-        var expr = equality()
+        var expr = or()
         if (match(TokenType.QUESTION)) {
             val trueExpr = expression()
             consume(TokenType.COLON, "Expect ':' for ternary operation")
             val falseExpr = ternary()
             expr = Expression.Ternary(expr, trueExpr, falseExpr)
+        }
+        return expr
+    }
+
+    // logic_or       → logic_and ( "or" logic_and )* ;
+    private fun or(): Expression {
+        var expr = and()
+        while (match(TokenType.OR)) {
+            val operator = previous
+            val right = and()
+            expr = Expression.Logical(expr, operator, right)
+        }
+        return expr
+    }
+
+    // logic_and      → equality ( "and" equality )* ;
+    private fun and(): Expression {
+        var expr = equality()
+        while (match(TokenType.AND)) {
+            val operator = previous
+            val right = equality()
+            expr = Expression.Logical(expr, operator, right)
         }
         return expr
     }
