@@ -7,6 +7,7 @@ sealed class Expr {
     data class Assign<E>(val name: Token, val expr: E): Expr()
     data class Ternary<E>(val check: E, val trueValue: E, val falseValue: E): Expr()
     data class Binary<E>(val left: E, val operator: Token, val right: E): Expr()
+    data class Call<E>(val callee: E, val paren: Token, val arguments: List<E>): Expr()
     data class Grouping<E>(val expr: E): Expr()
     data class Literal(val value: Any?): Expr()
     data class Logical<E>(val left: E, val operator: Token, val right: E): Expr()
@@ -18,9 +19,11 @@ sealed class Expr {
 sealed class Stat {
     data class Block<S>(val statements: List<S>): Stat()
     data class Expr<E>(val expr: E): Stat()
+    data class Function<S>(val name: Token, val params: List<Token>, val body: List<S>): Stat()
     data class If<E, S>(val condition: E, val thenStatement: S, val elseStatement: S?): Stat()
     data class Print<E>(val expr: E): Stat()
+    data class Return<E>(val keyword: Token, val value: E?): Stat()
     data class Var<E>(val name: Token, val initializer: E?): Stat()
     data class While<E, S>(val condition: E, val body: S): Stat()
-    object Break: Stat()
+    data class Break(val keyword: Token): Stat()
 }

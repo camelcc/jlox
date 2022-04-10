@@ -1,12 +1,13 @@
-for (var i = 1; i < 100; i = i + 1) {
-  print "i = " + i;
-  for (var j = 1; j < 100; j = j +1) {
-    print "j = " + j;
-    if (j > 7) {
-      break;
-    }
+fun makeCounter() {
+  var i = 0;
+  fun count() {
+    i = i + 1;
+    print i;
   }
-  if (i > 13) {
-    break;
-  }
+
+  return count;
 }
+
+var counter = makeCounter();
+counter(); // "1".
+counter(); // "2".

@@ -5,10 +5,23 @@ import com.camelcc.lox.ast.Statement
 import runtimeError
 
 class RuntimeError(val token: Token, override val message: String): RuntimeException(message)
+object Break: RuntimeException(null, null, false, false)
+class Return(val value: Any?): RuntimeException(null, null, false, false)
 
 class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
-    private var environment = Environment()
-    private var breakWhile = false
+    val globals = Environment()
+    private var environment = globals
+
+    init {
+        globals.define("clock", object : LoxCallable {
+            override fun arity() = 0
+
+            override fun call(interpreter: Interpreter, arguments: List<Any?>) =
+                (System.currentTimeMillis()/1000).toDouble()
+
+            override fun toString() = "<native fn>"
+        })
+    }
 
     fun interpret(statements: List<Statement>) {
         try {
@@ -106,6 +119,20 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
         }
     }
 
+    override fun visitCallExpression(expression: Expression.Call): Any? {
+        val callee = evaluate(expression.callee)
+        val arguments = expression.arguments.map { evaluate(it) }
+
+        if (callee !is LoxCallable) {
+            throw RuntimeError(expression.paren, "Can only call functions and classes.")
+        }
+        val function = callee as LoxCallable
+        if (arguments.size != function.arity()) {
+            throw RuntimeError(expression.paren, "Expected ${function.arity()} arguments but got ${arguments.size}.")
+        }
+        return function.call(this, arguments)
+    }
+
     override fun visitGroupingExpression(expression: Expression.Grouping) =
         evaluate(expression.expr)
 
@@ -157,29 +184,38 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
     }
 
     override fun visitWhileStatement(statement: Statement.While): Any? {
-        while (isTruthy(evaluate(statement.condition))) {
-            if (breakWhile) {
-                breakWhile = false
-                break
+        try {
+            while (isTruthy(evaluate(statement.condition))) {
+                execute(statement.body)
             }
-            execute(statement.body)
+        } catch (b: Break) {
         }
         return null
     }
 
     override fun visitBreakStatement(statement: Statement.Break): Any? {
-        breakWhile = true
-        return null
+        throw Break
     }
 
     override fun visitExprStatement(statement: Statement.Expr): Any? {
         return evaluate(statement.expr)
     }
 
+    override fun visitFunctionStatement(statement: Statement.Function): Any? {
+        val function = LoxFunction(statement, environment)
+        environment.define(statement.name.lexeme, function)
+        return null
+    }
+
     override fun visitPrintStatement(statement: Statement.Print): Any? {
         val value = evaluate(statement.expr)
         println(stringify(value))
         return null
+    }
+
+    override fun visitReturnStatement(statement: Statement.Return): Any? {
+        val res = statement.value?.let { evaluate(it) }
+        throw Return(res)
     }
 
     override fun visitVarStatement(statement: Statement.Var): Any? {
@@ -195,7 +231,7 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
         return null
     }
 
-    private fun executeBlock(statements: List<Statement>, env: Environment) {
+    fun executeBlock(statements: List<Statement>, env: Environment) {
         val popEnvironment = environment
         try {
             environment = env
