@@ -11,6 +11,7 @@ class Return(val value: Any?): RuntimeException(null, null, false, false)
 class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
     val globals = Environment()
     private var environment = globals
+    private val locals = mutableMapOf<Expression, Int>()
 
     init {
         globals.define("clock", object : LoxCallable {
@@ -38,6 +39,10 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
 
     private fun execute(statement: Statement) =
         statement.accept(this)
+
+    fun resolve(expression: Expression, depth: Int) {
+        locals[expression] = depth
+    }
 
     override fun visitTernaryExpression(expression: Expression.Ternary): Any? {
         return if (isTruthy(evaluate(expression.check))) {
@@ -166,11 +171,23 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
     }
 
     override fun visitVariableExpression(expression: Expression.Variable) =
-        environment.get(expression.name)
+        lookUpVariable(expression.name, expression)
+
+    private fun lookUpVariable(name: Token, expression: Expression): Any? {
+        val distance = locals[expression]
+        return distance?.let {
+            environment.getAt(it, name.lexeme)
+        } ?: globals.get(name)
+    }
 
     override fun visitAssignExpression(expression: Expression.Assign): Any? {
         val value = evaluate(expression.expr)
-        environment.assign(expression.name, value)
+        val distance = locals[expression]
+        if (distance != null) {
+            environment.assignAt(distance, expression.name, value)
+        } else {
+            globals.assign(expression.name, value)
+        }
         return value
     }
 

@@ -4,7 +4,6 @@ import java.io.InputStreamReader
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Paths
-import kotlin.math.exp
 import kotlin.system.exitProcess
 
 val interpreter = Interpreter()
@@ -48,10 +47,12 @@ private fun run(script: String) {
     val tokens = scanner.scanTokens()
     val parser = Parser(tokens)
     val statements = parser.parse()
+    if (hasError) return
 
-    if (hasError) {
-        return
-    }
+    val resolver = Resolver(interpreter)
+    resolver.resolve(statements)
+
+    if (hasError) return
 
     interpreter.interpret(statements)
 }
@@ -61,6 +62,14 @@ var hadRuntimeError = false
 
 fun error(line: Int, message: String) {
     report(line = line, where = "", message = message)
+}
+
+fun error(token: Token, message: String) {
+    if (token.tokenType == TokenType.EOF) {
+        report(token.line, " at end", message)
+    } else {
+        report(token.line, " at '${token.lexeme}'", message)
+    }
 }
 
 fun report(line: Int, where: String, message: String) {
