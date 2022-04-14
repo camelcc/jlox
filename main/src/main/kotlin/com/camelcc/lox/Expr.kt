@@ -1,7 +1,6 @@
 package com.camelcc.lox
 
 import com.camelcc.lox.ast.ASTGenerator
-import com.camelcc.lox.ast.Expression
 
 @ASTGenerator(name = "Expression", mapping = ["E:Expression"])
 sealed class Expr {
