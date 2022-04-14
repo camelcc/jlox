@@ -14,15 +14,16 @@ sealed class Expr {
     data class Literal(val value: Any?): Expr()
     data class Logical<E>(val left: E, val operator: Token, val right: E): Expr()
     data class Set<E>(val obj: E, val name: Token, val value: E): Expr()
+    data class Super(val keyword: Token, val method: Token): Expr()
     data class This(val keyword: Token): Expr()
     data class Unary<E>(val token: Token, val right: E): Expr()
     data class Variable(val name: Token): Expr()
 }
 
-@ASTGenerator(name = "Statement", mapping = ["E:Expression", "S:Statement", "F:Function"])
+@ASTGenerator(name = "Statement", mapping = ["E:Expression", "S:Statement", "F:Function", "V:Expression.Variable"])
 sealed class Stat {
     data class Block<S>(val statements: List<S>): Stat()
-    data class Class<F>(val name: Token, val methods: List<F>): Stat()
+    data class Class<V, F>(val name: Token, val superClass: V?, val methods: List<F>): Stat()
     data class Expr<E>(val expr: E): Stat()
     data class Function<S>(val name: Token, val params: List<Token>, val body: List<S>): Stat()
     data class If<E, S>(val condition: E, val thenStatement: S, val elseStatement: S?): Stat()

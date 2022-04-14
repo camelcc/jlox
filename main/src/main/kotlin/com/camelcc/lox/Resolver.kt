@@ -6,7 +6,7 @@ import error
 import java.util.*
 
 enum class FunctionType { NONE, FUNCTION, INITIALIZER, METHOD }
-enum class ClassType { NONE, CLASS }
+enum class ClassType { NONE, CLASS, SUBCLASS }
 
 class Resolver(private val interpreter: Interpreter):
     Expression.Visitor<Unit>, Statement.Visitor<Unit> {
@@ -27,6 +27,20 @@ class Resolver(private val interpreter: Interpreter):
         declare(statement.name)
         define(statement.name)
 
+        if (statement.superClass != null && statement.name.lexeme == statement.superClass.name.lexeme) {
+            error(statement.superClass.name, "A class can't inherit from itself.")
+        }
+
+        if (statement.superClass != null) {
+            currentClass = ClassType.SUBCLASS
+            resolve(statement.superClass)
+        }
+
+        if (statement.superClass != null) {
+            beginScope()
+            scopes.peek()["super"] = true
+        }
+
         beginScope()
         scopes.peek()["this"] = true
         for (method in statement.methods) {
@@ -38,6 +52,10 @@ class Resolver(private val interpreter: Interpreter):
             resolveFunction(method, declaration)
         }
         endScope()
+
+        if (statement.superClass != null) {
+            endScope()
+        }
 
         currentClass = enclosingClass
     }
@@ -193,6 +211,15 @@ class Resolver(private val interpreter: Interpreter):
     override fun visitSetExpression(expression: Expression.Set) {
         resolve(expression.value)
         resolve(expression.obj)
+    }
+
+    override fun visitSuperExpression(expression: Expression.Super) {
+        if (currentClass == ClassType.NONE) {
+            error(expression.keyword, "Can't use 'super' outside of a class.")
+        } else if (currentClass != ClassType.SUBCLASS) {
+            error(expression.keyword, "Can't use 'super' in a class with no superclass.")
+        }
+        resolveLocal(expression, expression.keyword)
     }
 
     override fun visitThisExpression(expression: Expression.This) {

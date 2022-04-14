@@ -1,6 +1,8 @@
 package com.camelcc.lox
 
-class LoxClass(override val name: String, private val methods: Map<String, LoxFunction>): LoxCallable, LoxInstance(name) {
+class LoxClass(override val name: String,
+               private val superClass: LoxClass?,
+               private val methods: Map<String, LoxFunction>): LoxCallable, LoxInstance(name) {
     override fun arity() =
         findMethod("init")?.arity() ?: 0
 
@@ -11,7 +13,16 @@ class LoxClass(override val name: String, private val methods: Map<String, LoxFu
         return this
     }
 
-    override fun findMethod(name: String) = methods[name]
+    override fun findMethod(name: String): LoxFunction? {
+        val method = methods[name]
+        if (method != null) {
+            return method
+        }
+        if (superClass != null) {
+            return superClass.findMethod(name)
+        }
+        return null
+    }
 
     override fun toString() = name
 }

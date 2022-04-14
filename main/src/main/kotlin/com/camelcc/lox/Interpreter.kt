@@ -176,6 +176,15 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
         return value
     }
 
+    override fun visitSuperExpression(expression: Expression.Super): Any? {
+        val distance = locals[expression]
+        val superClass = environment.getAt(distance!!, "super")
+        val obj = environment.getAt(distance-1, "this")!!
+        val method = (superClass as LoxClass).findMethod(expression.method.lexeme)
+            ?: throw RuntimeError(expression.method, "Undefined property '${expression.method.lexeme}'.")
+        return method.bind(obj as LoxInstance)
+    }
+
     override fun visitThisExpression(expression: Expression.This): Any? =
         lookUpVariable(expression.keyword, expression)
 
@@ -270,7 +279,20 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
     }
 
     override fun visitClassStatement(statement: Statement.Class): Any? {
+        var superClass: Any? = null
+        if (statement.superClass != null) {
+            superClass = evaluate(statement.superClass)
+            if (superClass !is LoxClass) {
+                throw RuntimeError(statement.superClass.name, "Superclass must be a class.")
+            }
+        }
+
         environment.define(statement.name.lexeme, null)
+
+        if (statement.superClass != null) {
+            environment = Environment(environment)
+            environment.define("super", superClass)
+        }
 
         val methods = mutableMapOf<String, LoxFunction>()
         for (method in statement.methods) {
@@ -278,7 +300,12 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
             methods[method.name.lexeme] = function
         }
 
-        val clazz = LoxClass(statement.name.lexeme, methods)
+        val clazz = LoxClass(statement.name.lexeme, superClass as LoxClass?, methods)
+
+        if (superClass != null) {
+            environment = environment.enclosing!!
+        }
+
         environment.assign(statement.name, clazz)
         return null
     }

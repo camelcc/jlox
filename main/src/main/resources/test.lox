@@ -1,7 +1,14 @@
-class Math {
-  class square(n) {
-    return n * n;
+class Doughnut {
+  cook() {
+    print "Fry until golden brown.";
   }
 }
 
-print Math.square(3); // Prints "9".
+class BostonCream < Doughnut {
+  cook() {
+    super.cook();
+    print "Pipe full of custard and coat with chocolate.";
+  }
+}
+
+BostonCream().cook();
