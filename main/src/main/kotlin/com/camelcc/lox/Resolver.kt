@@ -5,17 +5,41 @@ import com.camelcc.lox.ast.Statement
 import error
 import java.util.*
 
-enum class FunctionType { NONE, FUNCTION }
+enum class FunctionType { NONE, FUNCTION, INITIALIZER, METHOD }
+enum class ClassType { NONE, CLASS }
 
 class Resolver(private val interpreter: Interpreter):
     Expression.Visitor<Unit>, Statement.Visitor<Unit> {
     private val scopes = Stack<MutableMap<String, Any?>>()
     private var currentFunction = FunctionType.NONE
+    private var currentClass = ClassType.NONE
 
     override fun visitBlockStatement(statement: Statement.Block) {
         beginScope()
         resolve(statement.statements)
         endScope()
+    }
+
+    override fun visitClassStatement(statement: Statement.Class) {
+        val enclosingClass = currentClass
+        currentClass = ClassType.CLASS
+
+        declare(statement.name)
+        define(statement.name)
+
+        beginScope()
+        scopes.peek()["this"] = true
+        for (method in statement.methods) {
+            var declaration = FunctionType.METHOD
+            if (method.name.lexeme == "init") {
+                declaration = FunctionType.INITIALIZER
+            }
+
+            resolveFunction(method, declaration)
+        }
+        endScope()
+
+        currentClass = enclosingClass
     }
 
     fun resolve(statements: List<Statement>) {
@@ -121,11 +145,14 @@ class Resolver(private val interpreter: Interpreter):
     }
 
     override fun visitReturnStatement(statement: Statement.Return) {
-        if (currentFunction != FunctionType.FUNCTION) {
+        if (currentFunction == FunctionType.NONE) {
             error(statement.keyword, "Can't return from top-level code.")
         }
 
         statement.value?.also {
+            if (currentFunction == FunctionType.INITIALIZER) {
+                error(statement.keyword, "Can't return a value from an initializer.")
+            }
             resolve(it)
         }
     }
@@ -147,6 +174,10 @@ class Resolver(private val interpreter: Interpreter):
         }
     }
 
+    override fun visitGetExpression(expression: Expression.Get) {
+        resolve(expression.obj)
+    }
+
     override fun visitGroupingExpression(expression: Expression.Grouping) {
         resolve(expression.expr)
     }
@@ -157,6 +188,18 @@ class Resolver(private val interpreter: Interpreter):
     override fun visitLogicalExpression(expression: Expression.Logical) {
         resolve(expression.left)
         resolve(expression.right)
+    }
+
+    override fun visitSetExpression(expression: Expression.Set) {
+        resolve(expression.value)
+        resolve(expression.obj)
+    }
+
+    override fun visitThisExpression(expression: Expression.This) {
+        if (currentClass == ClassType.NONE) {
+            error(expression.keyword, "Can't use 'this' outside of a class.")
+        }
+        resolveLocal(expression, expression.keyword)
     }
 
     override fun visitUnaryExpression(expression: Expression.Unary) {

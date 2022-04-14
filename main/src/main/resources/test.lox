@@ -1,10 +1,7 @@
-var a = "global";
-{
-  fun showA() {
-    print a;
+class Math {
+  class square(n) {
+    return n * n;
   }
-
-  showA();
-  var a = "block";
-  showA();
 }
+
+print Math.square(3); // Prints "9".

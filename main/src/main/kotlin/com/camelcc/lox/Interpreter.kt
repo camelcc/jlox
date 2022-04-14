@@ -138,6 +138,14 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
         return function.call(this, arguments)
     }
 
+    override fun visitGetExpression(expression: Expression.Get): Any? {
+        val obj = evaluate(expression.obj)
+        if (obj is LoxInstance) {
+            return obj.get(expression.name)
+        }
+        throw RuntimeError(expression.name, "Only instances have properties.")
+    }
+
     override fun visitGroupingExpression(expression: Expression.Grouping) =
         evaluate(expression.expr)
 
@@ -157,6 +165,19 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
         }
         return evaluate(expression.right)
     }
+
+    override fun visitSetExpression(expression: Expression.Set): Any? {
+        val obj = evaluate(expression.obj)
+        if (obj !is LoxInstance) {
+            throw RuntimeError(expression.name, "Only instances have fields.")
+        }
+        val value = evaluate(expression.value)
+        obj.set(expression.name, value)
+        return value
+    }
+
+    override fun visitThisExpression(expression: Expression.This): Any? =
+        lookUpVariable(expression.keyword, expression)
 
     override fun visitUnaryExpression(expression: Expression.Unary): Any? {
         val right = evaluate(expression.right)
@@ -219,7 +240,7 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
     }
 
     override fun visitFunctionStatement(statement: Statement.Function): Any? {
-        val function = LoxFunction(statement, environment)
+        val function = LoxFunction(statement, environment, false)
         environment.define(statement.name.lexeme, function)
         return null
     }
@@ -245,6 +266,20 @@ class Interpreter: Expression.Visitor<Any?>, Statement.Visitor<Any?> {
 
     override fun visitBlockStatement(statement: Statement.Block): Any? {
         executeBlock(statement.statements, Environment(environment))
+        return null
+    }
+
+    override fun visitClassStatement(statement: Statement.Class): Any? {
+        environment.define(statement.name.lexeme, null)
+
+        val methods = mutableMapOf<String, LoxFunction>()
+        for (method in statement.methods) {
+            val function = LoxFunction(method, environment, method.name.lexeme == "init")
+            methods[method.name.lexeme] = function
+        }
+
+        val clazz = LoxClass(statement.name.lexeme, methods)
+        environment.assign(statement.name, clazz)
         return null
     }
 

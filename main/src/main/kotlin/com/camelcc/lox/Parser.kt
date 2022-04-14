@@ -37,11 +37,13 @@ class Parser(private val tokens: List<Token>) {
         return previous
     }
 
-    // declaration    → funDecl
+    // declaration    → classDecl
+    //                | funDecl
     //                | varDecl
     //                | statement ;
     private fun declaration(): Statement? {
         try {
+            if (match(TokenType.CLASS)) return classDeclaration()
             if (match(TokenType.FUN)) return function("function")
             if (match(TokenType.VAR)) return varDeclaration()
             return statement()
@@ -49,6 +51,18 @@ class Parser(private val tokens: List<Token>) {
             synchronize()
             return null
         }
+    }
+
+    // classDecl      → "class" IDENTIFIER "{" function* "}" ;
+    private fun classDeclaration(): Statement {
+        val name = consume(TokenType.IDENTIFIER, "Expect class name.")
+        consume(TokenType.LEFT_BRACE, "Expect '{' before class body.")
+        val methods = mutableListOf<Statement.Function>()
+        while (!check(TokenType.RIGHT_BRACE) && !isAtEnd) {
+            methods.add(function("method"))
+        }
+        consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.")
+        return Statement.Class(name, methods)
     }
 
     // varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
@@ -176,7 +190,9 @@ class Parser(private val tokens: List<Token>) {
 
     // funDecl        → "fun" function ;
     // function       → IDENTIFIER "(" parameters? ")" block ;
-    private fun function(kind: String): Statement {
+    private fun function(kind: String): Statement.Function {
+        // consume class static function
+        if (match(TokenType.CLASS)) { }
         val name = consume(TokenType.IDENTIFIER, "Expect $kind name")
         consume(TokenType.LEFT_PAREN, "Expect '(' after $kind name.")
         val parameters = mutableListOf<Token>()
@@ -208,8 +224,9 @@ class Parser(private val tokens: List<Token>) {
         return expr
     }
 
-    // assignment     → IDENTIFIER "=" assignment
-    //                | ternary;
+    // assignment     → ( call "." )? IDENTIFIER "=" assignment
+    //                | ternary
+    //                | logic_or ;
     private fun assignment(): Expression {
         val expr = ternary()
         if (match(TokenType.EQUAL)) {
@@ -218,6 +235,8 @@ class Parser(private val tokens: List<Token>) {
             if (expr is Expression.Variable) {
                 val name = expr.name
                 return Expression.Assign(name, value)
+            } else if (expr is Expression.Get) {
+                return Expression.Set(expr.obj, expr.name, value)
             }
             error(equals, "Invalid assignment target.")
         }
@@ -329,12 +348,15 @@ class Parser(private val tokens: List<Token>) {
         return call()
     }
 
-    // call           → primary ( "(" arguments? ")" )* ;
+    // call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
     private fun call(): Expression {
         var expr = primary()
         while (true) {
             if (match(TokenType.LEFT_PAREN)) {
                 expr = finishCall(expr)
+            } else if (match(TokenType.DOT)) {
+                val name = consume(TokenType.IDENTIFIER, "Expect property name after '.'.")
+                expr = Expression.Get(expr, name)
             } else {
                 break
             }
@@ -372,6 +394,9 @@ class Parser(private val tokens: List<Token>) {
         }
         if (match(TokenType.NUMBER, TokenType.STRING)) {
             return Expression.Literal(previous.literal)
+        }
+        if (match(TokenType.THIS)) {
+            return Expression.This(previous)
         }
         if (match(TokenType.IDENTIFIER)) {
             return Expression.Variable(previous)
